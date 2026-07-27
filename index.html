@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GrabFood Sales Operations — Merchant Dashboard</title>
+<!-- Tải các thư viện Icon và Font -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
   :root {
     --grab-green: #00B14F;
@@ -87,7 +89,6 @@
   .chart-subtitle { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; margin-bottom: 8px; }
   .chart-wrap { position: relative; width: 100%; }
   .h-260 { height: 260px; }
-  .h-240 { height: 240px; }
 </style>
 </head>
 <body>
@@ -119,7 +120,7 @@
   <div class="page-header">
     <div>
       <h2>GrabFood Sales Operations — Merchant Dashboard</h2>
-      <p>Theo dõi merchant theo GF Tenure · dữ liệu tự động cập nhật</p>
+      <p>Theo dõi merchant theo GF Tenure · dữ liệu tự động đồng bộ từ Google Sheets</p>
     </div>
     <div class="refresh-tag"><span class="dot"></span><span id="refresh-time">Đang tải...</span></div>
   </div>
@@ -199,7 +200,7 @@
     <div class="chart-grid chart-grid-2">
     <div class="chart-section">
       <div class="chart-title">Daily orders vs Estimated daily revenue theo GF Tenure</div>
-      <div class="chart-subtitle">Trục trái: số đơn/ngày &nbsp;·&nbsp; Trục phải: USD ($)/ngày (= Daily Orders × AOV)</div>
+      <div class="chart-subtitle">Trục trái: số đơn/ngày &nbsp;·&nbsp; Trục phải: USD ($)/ngày</div>
       <div class="chart-wrap h-260"><canvas id="chartRev1"></canvas></div>
     </div>
 
@@ -217,14 +218,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
 <script>
 const CONFIG = {
-  DATA_SOURCE_TYPE: 'csv',
+  // Thay url để xuất file CSV thẳng từ Google Sheets (Sheet: Dashboard_Data)
   DATA_SOURCE_URL: 'https://docs.google.com/spreadsheets/d/11EL_iaj4gC0oovhRGe_PdwwM15_XjmF2d5FIzg_QePA/gviz/tq?tqx=out:csv&sheet=Dashboard_Data',
-  REFRESH_INTERVAL_MS: 5 * 60 * 1000
+  REFRESH_INTERVAL_MS: 5 * 60 * 1000 // Tự refresh mỗi 5 phút
 };
 
 const ALL_LABELS = ['M0','M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12','M12+'];
 const green = '#00B14F', greenDark = '#00833E', greenLight = '#6FCF97', gray = '#5B615C';
 
+// Fallback dự phòng trong trường hợp offline hoặc link sheet hỏng
 const FALLBACK_DATA = {
   photoCoverage: [88,90,86,90,90,88,89,89,92,92,90,91,91,87],
   conversionRate: [0.20,0.35,0.40,0.50,0.55,0.60,0.60,0.65,0.70,0.70,0.72,0.75,0.78,0.80],
@@ -238,14 +240,17 @@ const FALLBACK_DATA = {
   medianEarnings: [25,30,40,50,55,55,60,60,60,63,63,63,67,67],
   marketingInvestment: [52,39,25,18,15,15,14,13,13,12,12,12,13,8],
   onlineMenuMarkup: [105,110,115,112,110,115,117,119,120,119,119,120,120,122],
-  selfServeAdoption: [75,82,82,77,75,73,71,69,70,67,67,65,68,59]
+  selfServeAdoption: [75,82,82,77,75,73,71,69,70,67,67,65,68,59],
+  estRevenue: [12, 17.5, 24, 28.7, 29.4, 30.1, 30.8, 30.1, 35.2, 30.8, 30.1, 34.4, 30.1, 38.7]
 };
-FALLBACK_DATA.estRevenue = FALLBACK_DATA.dailyOrders.map((o,i) => +(o * FALLBACK_DATA.aov[i]).toFixed(2));
 
+// Hàm xử lý số linh hoạt: Đọc được số thập phân dù dùng dấu chấm hay phẩy
 function num(v) {
   if (typeof v === 'number') return v;
-  if (v === null || v === undefined) return 0;
-  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  if (v === null || v === undefined || v === '') return 0;
+  let str = String(v).trim();
+  if (str.includes(',') && !str.includes('.')) str = str.replace(',', '.'); // Đổi phẩy thành chấm nếu dùng format VN
+  const n = parseFloat(str.replace(/[^0-9.\-]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
@@ -253,21 +258,35 @@ function normalizeRows(rows) {
   const d = { photoCoverage: [], conversionRate: [], retention: [], medianRating: [], medianReviews: [],
               promotionPct: [], adsPct: [], dailyOrders: [], aov: [], medianEarnings: [], marketingInvestment: [],
               onlineMenuMarkup: [], selfServeAdoption: [], estRevenue: [] };
+              
   rows.forEach(r => {
-    d.conversionRate.push(num(r.ConversionRate));
-    d.medianRating.push(num(r.MedianRating));
-    d.medianReviews.push(num(r.MedianReviews));
-    d.photoCoverage.push(num(r.PhotoCoverage));
-    d.dailyOrders.push(num(r.DailyOrders));
-    d.aov.push(num(r.AOV));
-    d.promotionPct.push(num(r.PromotionPct));
-    d.adsPct.push(num(r.AdsPct));
-    d.retention.push(num(r.RetentionPct));
-    d.medianEarnings.push(num(r['Median Earnings'] ?? r.MedianEarnings));
-    d.marketingInvestment.push(num(r["Merchant's Marketing Investment"] ?? r.MarketingInvestment));
-    d.onlineMenuMarkup.push(num(r['Online Menu Price Mark-up'] ?? r.OnlineMenuMarkup));
-    d.selfServeAdoption.push(num(r['Self-Serve Marketing Adoption'] ?? r.SelfServeAdoption));
-    d.estRevenue.push(num(r.EstDailyRev));
+    // Làm sạch key của object để tránh lỗi do khoảng trắng thừa trên Header Google Sheet
+    const cleanRow = {};
+    for (let key in r) { cleanRow[key.trim()] = r[key]; }
+
+    d.conversionRate.push(num(cleanRow.ConversionRate));
+    d.medianRating.push(num(cleanRow.MedianRating));
+    d.medianReviews.push(num(cleanRow.MedianReviews));
+    d.photoCoverage.push(num(cleanRow.PhotoCoverage));
+    d.dailyOrders.push(num(cleanRow.DailyOrders));
+    d.aov.push(num(cleanRow.AOV));
+    d.promotionPct.push(num(cleanRow.PromotionPct));
+    d.adsPct.push(num(cleanRow.AdsPct));
+    d.retention.push(num(cleanRow.RetentionPct));
+    
+    // Đọc linh hoạt các cột có khoảng trắng
+    d.medianEarnings.push(num(cleanRow['MedianEarnings'] ?? cleanRow['Median Earnings']));
+    d.marketingInvestment.push(num(cleanRow['MarketingInvestment'] ?? cleanRow["Merchant's Marketing Investment"]));
+    d.onlineMenuMarkup.push(num(cleanRow['OnlineMenuMarkup'] ?? cleanRow['Online Menu Price Mark-up']));
+    d.selfServeAdoption.push(num(cleanRow['SelfServeAdoption'] ?? cleanRow['Self-Serve Marketing Adoption']));
+    
+    // Lấy EstDailyRev TRỰC TIẾP TỪ SHEET, nếu trên Sheet trống thì mới fallback về nhân tay
+    const rawEstRev = cleanRow['EstDailyRev'] ?? cleanRow['Est Daily Rev'];
+    if (rawEstRev !== undefined && rawEstRev !== "") {
+      d.estRevenue.push(num(rawEstRev));
+    } else {
+      d.estRevenue.push(num(cleanRow.DailyOrders) * num(cleanRow.AOV));
+    }
   });
   return d;
 }
@@ -275,18 +294,21 @@ function normalizeRows(rows) {
 async function fetchLiveData() {
   if (!CONFIG.DATA_SOURCE_URL) return null;
   try {
-    if (CONFIG.DATA_SOURCE_TYPE === 'csv') {
-      const res = await fetch(CONFIG.DATA_SOURCE_URL);
-      const text = await res.text();
-      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-      return normalizeRows(parsed.data);
-    } else {
-      const res = await fetch(CONFIG.DATA_SOURCE_URL);
-      const json = await res.json();
-      return normalizeRows(json);
+    // Thêm &_t=timestamp vào URL để Google Sheets không bị vướng bộ nhớ đệm (Cache)
+    const noCacheUrl = `${CONFIG.DATA_SOURCE_URL}&_t=${new Date().getTime()}`;
+    const res = await fetch(noCacheUrl);
+    const text = await res.text();
+    
+    // Nếu google bắt đăng nhập sẽ trả về trang HTML thay vì CSV
+    if (text.trim().startsWith('<html') || text.trim().startsWith('<!DOCTYPE html>')) {
+      console.error('Google Sheet đang bị khóa quyền truy cập. Hãy bật quyền "Bất kỳ ai có liên kết".');
+      return null;
     }
+    
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    return normalizeRows(parsed.data);
   } catch (err) {
-    console.error('Không lấy được live data:', err);
+    console.error('Lỗi khi lấy dữ liệu từ Google Sheets:', err);
     return null;
   }
 }
@@ -389,7 +411,7 @@ function render() {
 
   setKpi('cr', d.conversionRate, v => v.toFixed(2) + '%');
   setKpi('ret', d.retention, v => Math.round(v) + '%');
-  setKpi('rev', d.estRevenue, v => '$' + v.toFixed(1));
+  setKpi('rev', d.estRevenue, v => '$' + v.toFixed(2)); // Cập nhật lại hiển thị thành 2 số sau dấy phẩy cho rõ ràng
   setKpi('ord', d.dailyOrders, v => v.toFixed(1));
 
   upsertLineBarChart('chartFunnel1', {
@@ -505,14 +527,22 @@ function render() {
 }
 
 async function refresh() {
+  document.getElementById('refresh-time').textContent = 'Đang tải dữ liệu...';
   const live = await fetchLiveData();
-  if (live) currentFullData = live;
-  document.getElementById('refresh-time').textContent = 'Cập nhật lúc ' + new Date().toLocaleString('vi-VN') + (live ? ' (live)' : ' (data mẫu)');
+  
+  if (live) {
+    currentFullData = live;
+    document.getElementById('refresh-time').textContent = 'Live từ Sheets lúc ' + new Date().toLocaleTimeString('vi-VN');
+  } else {
+    document.getElementById('refresh-time').textContent = 'Dữ liệu mẫu (Lỗi tải Sheets)';
+  }
+  
   render();
 }
 
 initTenureDropdown();
 refresh();
+// Đặt thời gian refresh tự động (hiện tại: 5 phút / lần)
 setInterval(refresh, CONFIG.REFRESH_INTERVAL_MS);
 
 const navLinks = document.querySelectorAll('.nav-link');
