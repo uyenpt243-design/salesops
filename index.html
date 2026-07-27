@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrabFood Sales Operations — Merchant Dashboard</title>
+<style>
+  :root {
+    --grab-green: #00B14F;
+    --grab-green-dark: #00833E;
+    --grab-green-light: #6FCF97;
+    --grab-green-bg: #E7F8EE;
+    --ink: #1F2421;
+    --ink-soft: #5B615C;
+    --ink-muted: #8A8F8B;
+    --border: #DDE3DE;
+    --bg: #F5F7F5;
+    --card-bg: #FFFFFF;
+    --sidebar-w: 240px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); overflow-x: hidden; }
+
+  .sidebar {
+    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+    background: #0A3D24; color: #fff; padding: 20px 16px; overflow-y: auto; z-index: 10;
+  }
+  .sidebar h1 { font-size: 15px; font-weight: 700; margin: 0 0 2px; line-height: 1.3; }
+  .sidebar .tagline { font-size: 11.5px; color: #9FD9BB; margin: 0 0 20px; }
+  .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #7CC79E; margin: 18px 0 8px; font-weight: 700; }
+  .nav-link {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    color: #D8F3E4; text-decoration: none; font-size: 13px; margin-bottom: 2px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.08); }
+  .nav-link.active { background: var(--grab-green); color: #fff; font-weight: 600; }
+  .nav-link i { font-size: 16px; }
+
+  .filter-box { background: rgba(255,255,255,0.06); border-radius: 10px; padding: 12px; margin-top: 8px; }
+  .filter-box label { font-size: 11.5px; color: #B9E6CD; display: block; margin-bottom: 6px; }
+  .dropdown { position: relative; }
+  .dropdown-btn {
+    width: 100%; text-align: left; background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.25);
+    color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .dropdown-panel {
+    display: none; position: absolute; top: 105%; left: 0; width: 100%; max-height: 260px; overflow-y: auto;
+    background: #fff; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.25); padding: 8px; z-index: 20;
+  }
+  .dropdown-panel.open { display: block; }
+  .dropdown-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .dropdown-item:hover { background: var(--grab-green-bg); }
+  .dropdown-item input { accent-color: var(--grab-green); }
+  .dropdown-divider { border-top: 1px solid #eee; margin: 4px 0; }
+
+  main { margin-left: var(--sidebar-w); padding: 20px 24px 60px; width: calc(100% - var(--sidebar-w)); }
+
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+  .page-header h2 { margin: 0; font-size: 19px; font-weight: 700; }
+  .page-header p { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+  .refresh-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: var(--grab-green-bg); color: var(--grab-green-dark); padding: 5px 12px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--grab-green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .kpi-card { background: var(--card-bg); border: 0.5px solid var(--border); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+  .kpi-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+  .kpi-value { font-size: 23px; font-weight: 700; margin-top: 4px; color: var(--ink); }
+  .kpi-delta { font-size: 11.5px; margin-top: 4px; font-weight: 600; }
+  .kpi-delta.up { color: var(--grab-green-dark); }
+  .kpi-delta.down { color: #B3441F; }
+  .kpi-spark { height: 30px; margin-top: 6px; }
+
+  section { scroll-margin-top: 20px; margin-bottom: 4px; }
+  .section-title { display: flex; align-items: center; gap: 8px; font-size: 15.5px; font-weight: 700; color: var(--grab-green-dark); margin: 24px 0 12px; }
+  .section-title i { font-size: 18px; }
+
+  .chart-section { background: var(--card-bg); border: 0.5px solid var(--border); border-radius: 14px; padding: 16px 18px 10px; min-width: 0; }
+  .chart-grid { display: grid; gap: 14px; margin-bottom: 16px; }
+  .chart-grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .chart-grid-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+
+  .chart-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .chart-subtitle { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; margin-bottom: 8px; }
+  .chart-wrap { position: relative; width: 100%; }
+  .h-260 { height: 260px; }
+  .h-240 { height: 240px; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <h1>GrabFood Sales Operations</h1>
+  <p class="tagline">Merchant Dashboard</p>
+
+  <div class="nav-label">Điều hướng</div>
+  <a class="nav-link" data-target="funnel"><i class="ti ti-filter-cog"></i>Merchant lifecycle funnel</a>
+  <a class="nav-link" data-target="marketing"><i class="ti ti-speakerphone"></i>Merchant's marketing</a>
+  <a class="nav-link" data-target="revenue"><i class="ti ti-coin"></i>Revenue and earnings</a>
+
+  <div class="nav-label">Bộ lọc</div>
+  <div class="filter-box">
+    <label>GF Tenure (month)</label>
+    <div class="dropdown">
+      <button class="dropdown-btn" id="tenureDropdownBtn" type="button">
+        <span id="tenureDropdownLabel">Tất cả (M0–M12+)</span>
+        <i class="ti ti-chevron-down"></i>
+      </button>
+      <div class="dropdown-panel" id="tenureDropdownPanel"></div>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <div class="page-header">
+    <div>
+      <h2>GrabFood Sales Operations — Merchant Dashboard</h2>
+      <p>Theo dõi merchant theo GF Tenure · dữ liệu tự động cập nhật</p>
+    </div>
+    <div class="refresh-tag"><span class="dot"></span><span id="refresh-time">Đang tải...</span></div>
+  </div>
+
+  <div class="kpi-row" id="kpiRow">
+    <div class="kpi-card">
+      <div class="kpi-label">Conversion rate (avg)</div>
+      <div class="kpi-value" id="kpi-cr-value">–</div>
+      <div class="kpi-delta" id="kpi-cr-delta"></div>
+      <div class="kpi-spark"><canvas id="spark-cr"></canvas></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">% Merchant retained (avg)</div>
+      <div class="kpi-value" id="kpi-ret-value">–</div>
+      <div class="kpi-delta" id="kpi-ret-delta"></div>
+      <div class="kpi-spark"><canvas id="spark-ret"></canvas></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Estimated daily revenue ($)</div>
+      <div class="kpi-value" id="kpi-rev-value">–</div>
+      <div class="kpi-delta" id="kpi-rev-delta"></div>
+      <div class="kpi-spark"><canvas id="spark-rev"></canvas></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg daily orders</div>
+      <div class="kpi-value" id="kpi-ord-value">–</div>
+      <div class="kpi-delta" id="kpi-ord-delta"></div>
+      <div class="kpi-spark"><canvas id="spark-ord"></canvas></div>
+    </div>
+  </div>
+
+  <section id="funnel">
+    <div class="section-title"><i class="ti ti-filter-cog"></i>Merchant lifecycle funnel</div>
+
+    <div class="chart-grid chart-grid-2">
+    <div class="chart-section">
+      <div class="chart-title">Conversion rate vs Photo coverage theo GF Tenure</div>
+      <div class="chart-subtitle">Trục trái: % Photo coverage &nbsp;·&nbsp; Trục phải: % Conversion rate (view → checkout)</div>
+      <div class="chart-wrap h-260"><canvas id="chartFunnel1"></canvas></div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Median rating và số lượng review theo GF Tenure</div>
+      <div class="chart-subtitle">Trục trái: số review (median) &nbsp;·&nbsp; Trục phải: điểm rating (thang 1-5)</div>
+      <div class="chart-wrap h-260"><canvas id="chartFunnel2"></canvas></div>
+    </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">% Merchant retained theo GF Tenure</div>
+      <div class="chart-subtitle">Đơn vị: % merchant còn hoạt động trên platform (tính từ Tháng 0)</div>
+      <div class="chart-wrap h-260"><canvas id="chartFunnel3"></canvas></div>
+    </div>
+  </section>
+
+  <section id="marketing">
+    <div class="section-title"><i class="ti ti-speakerphone"></i>Merchant's marketing</div>
+
+    <div class="chart-grid chart-grid-2">
+    <div class="chart-section">
+      <div class="chart-title">Marketing investment vs Self-serve adoption theo GF Tenure</div>
+      <div class="chart-subtitle">Đơn vị: % doanh thu phân bổ marketing / % merchant tự dùng công cụ marketing</div>
+      <div class="chart-wrap h-260"><canvas id="chartMkt1"></canvas></div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Cơ cấu Marketing spend theo GF Tenure</div>
+      <div class="chart-subtitle">Đơn vị: % trong tổng Marketing Investment (Promotion vs Ads, stacked 100%)</div>
+      <div class="chart-wrap h-260"><canvas id="chartMkt2"></canvas></div>
+    </div>
+    </div>
+  </section>
+
+  <section id="revenue">
+    <div class="section-title"><i class="ti ti-coin"></i>Revenue and earnings</div>
+
+    <div class="chart-grid chart-grid-2">
+    <div class="chart-section">
+      <div class="chart-title">Daily orders vs Estimated daily revenue theo GF Tenure</div>
+      <div class="chart-subtitle">Trục trái: số đơn/ngày &nbsp;·&nbsp; Trục phải: USD ($)/ngày (= Daily Orders × AOV)</div>
+      <div class="chart-wrap h-260"><canvas id="chartRev1"></canvas></div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Median earnings vs Online menu price mark-up theo GF Tenure</div>
+      <div class="chart-subtitle">Trục trái: % doanh thu (Median Earnings) &nbsp;·&nbsp; Trục phải: % markup giá online so với offline</div>
+      <div class="chart-wrap h-260"><canvas id="chartRev2"></canvas></div>
+    </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+<script>
+const CONFIG = {
+  DATA_SOURCE_TYPE: 'csv',
+  DATA_SOURCE_URL: 'https://docs.google.com/spreadsheets/d/11EL_iaj4gC0oovhRGe_PdwwM15_XjmF2d5FIzg_QePA/gviz/tq?tqx=out:csv&sheet=Dashboard_Data',
+  REFRESH_INTERVAL_MS: 5 * 60 * 1000
+};
+
+const ALL_LABELS = ['M0','M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12','M12+'];
+const green = '#00B14F', greenDark = '#00833E', greenLight = '#6FCF97', gray = '#5B615C';
+
+const FALLBACK_DATA = {
+  photoCoverage: [88,90,86,90,90,88,89,89,92,92,90,91,91,87],
+  conversionRate: [0.20,0.35,0.40,0.50,0.55,0.60,0.60,0.65,0.70,0.70,0.72,0.75,0.78,0.80],
+  retention: [100,90,85,83,81,79,76,74,72,69,67,64,62,62],
+  medianRating: [4.5,4.5,4.4,4.4,4.4,4.3,4.3,4.3,4.2,4.2,4.2,4.2,4.2,4.1],
+  medianReviews: [3,5,10,15,18,18,20,25,30,30,35,35,40,90],
+  promotionPct: [25,35,50,60,65,60,60,62,62,62,70,75,85,75],
+  adsPct: [75,65,50,40,35,40,40,38,38,38,30,25,15,25],
+  dailyOrders: [4,5,6,7,7,7,7,7,8,7,7,8,7,9],
+  aov: [3.00,3.50,4.00,4.10,4.20,4.30,4.40,4.30,4.40,4.40,4.30,4.30,4.30,4.30],
+  medianEarnings: [25,30,40,50,55,55,60,60,60,63,63,63,67,67],
+  marketingInvestment: [52,39,25,18,15,15,14,13,13,12,12,12,13,8],
+  onlineMenuMarkup: [105,110,115,112,110,115,117,119,120,119,119,120,120,122],
+  selfServeAdoption: [75,82,82,77,75,73,71,69,70,67,67,65,68,59]
+};
+FALLBACK_DATA.estRevenue = FALLBACK_DATA.dailyOrders.map((o,i) => +(o * FALLBACK_DATA.aov[i]).toFixed(2));
+
+function num(v) {
+  if (typeof v === 'number') return v;
+  if (v === null || v === undefined) return 0;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function normalizeRows(rows) {
+  const d = { photoCoverage: [], conversionRate: [], retention: [], medianRating: [], medianReviews: [],
+              promotionPct: [], adsPct: [], dailyOrders: [], aov: [], medianEarnings: [], marketingInvestment: [],
+              onlineMenuMarkup: [], selfServeAdoption: [], estRevenue: [] };
+  rows.forEach(r => {
+    d.conversionRate.push(num(r.ConversionRate));
+    d.medianRating.push(num(r.MedianRating));
+    d.medianReviews.push(num(r.MedianReviews));
+    d.photoCoverage.push(num(r.PhotoCoverage));
+    d.dailyOrders.push(num(r.DailyOrders));
+    d.aov.push(num(r.AOV));
+    d.promotionPct.push(num(r.PromotionPct));
+    d.adsPct.push(num(r.AdsPct));
+    d.retention.push(num(r.RetentionPct));
+    d.medianEarnings.push(num(r['Median Earnings'] ?? r.MedianEarnings));
+    d.marketingInvestment.push(num(r["Merchant's Marketing Investment"] ?? r.MarketingInvestment));
+    d.onlineMenuMarkup.push(num(r['Online Menu Price Mark-up'] ?? r.OnlineMenuMarkup));
+    d.selfServeAdoption.push(num(r['Self-Serve Marketing Adoption'] ?? r.SelfServeAdoption));
+    d.estRevenue.push(num(r.EstDailyRev));
+  });
+  return d;
+}
+
+async function fetchLiveData() {
+  if (!CONFIG.DATA_SOURCE_URL) return null;
+  try {
+    if (CONFIG.DATA_SOURCE_TYPE === 'csv') {
+      const res = await fetch(CONFIG.DATA_SOURCE_URL);
+      const text = await res.text();
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+      return normalizeRows(parsed.data);
+    } else {
+      const res = await fetch(CONFIG.DATA_SOURCE_URL);
+      const json = await res.json();
+      return normalizeRows(json);
+    }
+  } catch (err) {
+    console.error('Không lấy được live data:', err);
+    return null;
+  }
+}
+
+let currentFullData = FALLBACK_DATA;
+let selectedIdx = ALL_LABELS.map((_, i) => i);
+let charts = {};
+
+function initTenureDropdown() {
+  const panel = document.getElementById('tenureDropdownPanel');
+  let html = '<div class="dropdown-item"><input type="checkbox" id="tenure-all" checked><label for="tenure-all" style="cursor:pointer;flex:1">Chọn tất cả</label></div><div class="dropdown-divider"></div>';
+  ALL_LABELS.forEach((l, i) => {
+    html += `<div class="dropdown-item"><input type="checkbox" class="tenure-cb" data-idx="${i}" checked id="tenure-${i}"><label for="tenure-${i}" style="cursor:pointer;flex:1">${l}</label></div>`;
+  });
+  panel.innerHTML = html;
+
+  document.getElementById('tenureDropdownBtn').addEventListener('click', () => panel.classList.toggle('open'));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown')) panel.classList.remove('open');
+  });
+
+  document.getElementById('tenure-all').addEventListener('change', (e) => {
+    document.querySelectorAll('.tenure-cb').forEach(cb => cb.checked = e.target.checked);
+    updateSelectionAndRender();
+  });
+  panel.querySelectorAll('.tenure-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const all = document.querySelectorAll('.tenure-cb');
+      const checkedCount = document.querySelectorAll('.tenure-cb:checked').length;
+      document.getElementById('tenure-all').checked = checkedCount === all.length;
+      updateSelectionAndRender();
+    });
+  });
+}
+
+function updateSelectionAndRender() {
+  const checked = Array.from(document.querySelectorAll('.tenure-cb:checked')).map(cb => +cb.dataset.idx);
+  selectedIdx = checked.length ? checked.sort((a,b) => a-b) : ALL_LABELS.map((_, i) => i);
+  const label = document.getElementById('tenureDropdownLabel');
+  label.textContent = selectedIdx.length === ALL_LABELS.length ? 'Tất cả (M0–M12+)' : selectedIdx.map(i => ALL_LABELS[i]).join(', ');
+  render();
+}
+
+function sliceData(d, idx) {
+  const out = { labels: idx.map(i => ALL_LABELS[i]) };
+  Object.keys(d).forEach(k => { out[k] = idx.map(i => d[k][i]); });
+  return out;
+}
+
+function sparkline(id, values, color) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels: values.map((_,i) => i), datasets: [{ data: values, borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.35, fill: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
+  });
+}
+
+function setKpi(prefix, values, formatFn) {
+  const avg = values.reduce((a,b) => a+b, 0) / values.length;
+  const up = values[values.length-1] >= values[0];
+  document.getElementById(`kpi-${prefix}-value`).textContent = formatFn(avg);
+  const deltaEl = document.getElementById(`kpi-${prefix}-delta`);
+  deltaEl.textContent = up ? '▲ tăng theo tenure' : '▼ giảm theo tenure';
+  deltaEl.className = 'kpi-delta ' + (up ? 'up' : 'down');
+  sparkline(`spark-${prefix}`, values, up ? green : '#B3441F');
+}
+
+function upsertLineBarChart(id, config) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+function toggleMonthFocus(realIdx) {
+  const boxes = document.querySelectorAll('.tenure-cb');
+  const isFocused = (selectedIdx.length === 1);
+  if (isFocused) {
+    boxes.forEach(cb => cb.checked = true);
+    document.getElementById('tenure-all').checked = true;
+  } else {
+    boxes.forEach(cb => cb.checked = (+cb.dataset.idx === realIdx));
+    document.getElementById('tenure-all').checked = false;
+  }
+  updateSelectionAndRender();
+}
+
+function withClickFilter(options, idxMap) {
+  options.onClick = (evt, elements) => {
+    if (elements && elements.length) toggleMonthFocus(idxMap[elements[0].index]);
+  };
+  options.onHover = (evt, elements) => {
+    evt.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+  };
+  return options;
+}
+
+function render() {
+  const d = sliceData(currentFullData, selectedIdx);
+  const idxMapForClick = selectedIdx;
+
+  setKpi('cr', d.conversionRate, v => v.toFixed(2) + '%');
+  setKpi('ret', d.retention, v => Math.round(v) + '%');
+  setKpi('rev', d.estRevenue, v => '$' + v.toFixed(1));
+  setKpi('ord', d.dailyOrders, v => v.toFixed(1));
+
+  upsertLineBarChart('chartFunnel1', {
+    type: 'line',
+    data: { labels: d.labels, datasets: [
+      { label: '% Photo coverage', data: d.photoCoverage, borderColor: green, backgroundColor: green, yAxisID: 'yLeft', tension: 0.3, borderWidth: 2, pointRadius: 3 },
+      { label: 'Conversion rate (%)', data: d.conversionRate, borderColor: gray, backgroundColor: gray, yAxisID: 'yRight', tension: 0.3, borderWidth: 2, pointRadius: 3, pointStyle: 'rectRot' }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        yLeft: { position: 'left', min: 0, max: 100, title: { display: true, text: '% Photo coverage' }, ticks: { callback: v => v + '%' } },
+        yRight: { position: 'right', min: 0, max: 1, title: { display: true, text: '% Conversion rate' }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartFunnel2', {
+    data: { labels: d.labels, datasets: [
+      { type: 'bar', label: 'Số review (median)', data: d.medianReviews, backgroundColor: greenLight, yAxisID: 'yLeft', borderRadius: 4, maxBarThickness: 20, order: 1 },
+      { type: 'line', label: 'Median rating (/5)', data: d.medianRating, borderColor: greenDark, backgroundColor: greenDark, yAxisID: 'yRight', tension: 0.3, borderWidth: 2, pointRadius: 3, order: 0 }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        yLeft: { position: 'left', title: { display: true, text: 'Số review (median)' }, beginAtZero: true, ticks: { stepSize: 20 } },
+        yRight: { position: 'right', min: 0, max: 5, title: { display: true, text: 'Rating (median, /5)' }, grid: { drawOnChartArea: false }, ticks: { stepSize: 1 } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartFunnel3', {
+    type: 'line',
+    data: { labels: d.labels, datasets: [{ label: '% Merchant retained', data: d.retention, borderColor: greenDark, backgroundColor: 'rgba(0,131,62,0.08)', tension: 0.3, borderWidth: 2, pointRadius: 3, fill: true }] },
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        y: { min: 0, max: 105, title: { display: true, text: '% merchant còn hoạt động' }, ticks: { callback: v => v + '%' } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartMkt1', {
+    type: 'line',
+    data: { labels: d.labels, datasets: [
+      { label: 'Marketing investment (%)', data: d.marketingInvestment, borderColor: green, backgroundColor: green, tension: 0.3, borderWidth: 2, pointRadius: 3 },
+      { label: 'Self-serve adoption (%)', data: d.selfServeAdoption, borderColor: greenDark, backgroundColor: greenDark, borderDash: [5,3], tension: 0.3, borderWidth: 2, pointRadius: 3 }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        y: { min: 0, max: 100, title: { display: true, text: '% doanh thu / % merchant' }, ticks: { callback: v => v + '%' } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartMkt2', {
+    type: 'bar',
+    data: { labels: d.labels, datasets: [
+      { label: '% Promotion', data: d.promotionPct, backgroundColor: green },
+      { label: '% Ads', data: d.adsPct, backgroundColor: greenDark }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { stacked: true, title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        y: { stacked: true, min: 0, max: 100, title: { display: true, text: '% trong Marketing spend' }, ticks: { callback: v => v + '%' } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartRev1', {
+    data: { labels: d.labels, datasets: [
+      { type: 'bar', label: 'Daily orders (đơn/ngày)', data: d.dailyOrders, backgroundColor: greenLight, yAxisID: 'yLeft', borderRadius: 4, maxBarThickness: 20, order: 1 },
+      { type: 'line', label: 'Estimated daily revenue ($)', data: d.estRevenue, borderColor: greenDark, backgroundColor: greenDark, yAxisID: 'yRight', tension: 0.3, borderWidth: 2, pointRadius: 3, order: 0 }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        yLeft: { position: 'left', title: { display: true, text: 'Số đơn / ngày' }, beginAtZero: true },
+        yRight: { position: 'right', title: { display: true, text: 'USD ($) / ngày' }, beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: v => '$' + v } }
+      }
+    }, idxMapForClick)
+  });
+
+  upsertLineBarChart('chartRev2', {
+    type: 'line',
+    data: { labels: d.labels, datasets: [
+      { label: 'Median earnings (%)', data: d.medianEarnings, borderColor: green, backgroundColor: green, yAxisID: 'yLeft', tension: 0.3, borderWidth: 2, pointRadius: 3 },
+      { label: 'Online menu price mark-up (%)', data: d.onlineMenuMarkup, borderColor: gray, backgroundColor: gray, yAxisID: 'yRight', tension: 0.3, borderWidth: 2, pointRadius: 3, pointStyle: 'rectRot' }
+    ]},
+    options: withClickFilter({
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { title: { display: true, text: 'GF Tenure (tháng)' }, grid: { display: false } },
+        yLeft: { position: 'left', min: 0, max: 100, title: { display: true, text: '% Median earnings' }, ticks: { callback: v => v + '%' } },
+        yRight: { position: 'right', min: 0, max: 140, title: { display: true, text: '% Online menu mark-up' }, grid: { drawOnChartArea: false }, ticks: { stepSize: 20, callback: v => v + '%' } }
+      }
+    }, idxMapForClick)
+  });
+}
+
+async function refresh() {
+  const live = await fetchLiveData();
+  if (live) currentFullData = live;
+  document.getElementById('refresh-time').textContent = 'Cập nhật lúc ' + new Date().toLocaleString('vi-VN') + (live ? ' (live)' : ' (data mẫu)');
+  render();
+}
+
+initTenureDropdown();
+refresh();
+setInterval(refresh, CONFIG.REFRESH_INTERVAL_MS);
+
+const navLinks = document.querySelectorAll('.nav-link');
+navLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    document.getElementById(link.dataset.target).scrollIntoView({ behavior: 'smooth' });
+  });
+});
+const sections = Array.from(document.querySelectorAll('main section'));
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(l => l.classList.toggle('active', l.dataset.target === entry.target.id));
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>
